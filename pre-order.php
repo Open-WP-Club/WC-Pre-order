@@ -1,11 +1,18 @@
 <?php
 
 /**
- * Plugin Name: WooCommerce Pre-Order Plugin
- * Description: Adds a Pre-Order page in the WooCommerce tab and checks for a specific promo code on specific products.
- * Version: 1.0
- * Author: Your Name
- * Text Domain: wc-preorder-plugin
+ * Plugin Name:             WooCommerce Pre-Order Plugin
+ * Description:             Pre-Ordering products using specific promo codes.
+ * Plugin URI:              https://github.com/MrGKanev/WC-Pre-order
+ * Description:             Displays users' last order dates and allows changing roles based on order inactivity.
+ * Version:                 0.0.1
+ * Author:                  Gabriel Kanev
+ * Author URI:              https://gkanev.com
+ * License:                 MIT
+ * Requires at least:       6.4
+ * Requires PHP:            7.4
+ * WC requires at least:    6.0
+ * WC tested up to:         9.1.2
  */
 
 // Exit if accessed directly
