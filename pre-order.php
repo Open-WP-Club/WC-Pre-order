@@ -5,7 +5,7 @@
  * Description:             Pre-Ordering products using specific promo codes.
  * Plugin URI:              https://github.com/MrGKanev/WC-Pre-order
  * Description:             Displays users' last order dates and allows changing roles based on order inactivity.
- * Version:                 0.0.4
+ * Version:                 0.0.6
  * Author:                  Gabriel Kanev
  * Author URI:              https://gkanev.com
  * License:                 MIT
@@ -62,7 +62,7 @@ add_action('admin_init', 'wc_preorder_admin_init');
 
 function wc_preorder_admin_init()
 {
-    register_setting('wc_preorder_settings_group', 'wc_preorder_settings');
+    register_setting('wc_preorder_settings_group', 'wc_preorder_settings', 'wc_preorder_sanitize_settings');
 
     add_settings_section(
         'wc_preorder_main_section',
@@ -86,6 +86,23 @@ function wc_preorder_admin_init()
         'wc-preorder',
         'wc_preorder_main_section'
     );
+}
+
+function wc_preorder_sanitize_settings($input)
+{
+    $sanitized_input = array();
+
+    if (isset($input['product_ids'])) {
+        $sanitized_input['product_ids'] = sanitize_text_field($input['product_ids']);
+    }
+
+    if (isset($input['promo_codes'])) {
+        $promo_codes = array_map('trim', explode(',', $input['promo_codes']));
+        $promo_codes = array_map('strtoupper', $promo_codes); // Convert to uppercase
+        $sanitized_input['promo_codes'] = implode(',', $promo_codes);
+    }
+
+    return $sanitized_input;
 }
 
 function wc_preorder_section_text()
@@ -130,7 +147,7 @@ function check_product_promo_code_and_toggle_checkout_button()
     }
 
     if ($found_required_product) {
-        $applied_coupons = WC()->cart->get_applied_coupons();
+        $applied_coupons = WC()->cart->get_applied_coupons(); // WooCommerce coupons are already uppercase
         $valid_promo_code_applied = false;
         foreach ($required_promo_codes as $promo_code) {
             if (in_array($promo_code, $applied_coupons)) {
@@ -174,7 +191,7 @@ function check_promo_code_ajax()
     }
 
     if ($found_required_product) {
-        $applied_coupons = WC()->cart->get_applied_coupons();
+        $applied_coupons = WC()->cart->get_applied_coupons(); // WooCommerce coupons are already uppercase
         $valid_promo_code_applied = false;
         foreach ($required_promo_codes as $promo_code) {
             if (in_array($promo_code, $applied_coupons)) {
