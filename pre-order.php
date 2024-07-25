@@ -20,6 +20,13 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Declare HPOS compatibility
+add_action('before_woocommerce_init', function () {
+    if (class_exists(\Automattic\WooCommerce\Utilities\FeaturesUtil::class)) {
+        \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
+    }
+});
+
 // Add a Pre-Order page under the WooCommerce tab
 add_action('admin_menu', 'wc_preorder_admin_menu');
 
