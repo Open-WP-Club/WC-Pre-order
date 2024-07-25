@@ -8,10 +8,14 @@ jQuery(document).ready(function($) {
             },
             success: function(response) {
                 if (response.success) {
-                    if (response.data.valid) {
-                        $('.checkout-button').show();
+                    if (response.data.required) {
+                        if (response.data.valid) {
+                            $('.checkout-button').show();
+                        } else {
+                            $('.checkout-button').hide();
+                        }
                     } else {
-                        $('.checkout-button').hide();
+                        $('.checkout-button').show();
                     }
                 }
             }

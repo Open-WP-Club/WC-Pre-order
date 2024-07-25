@@ -5,7 +5,7 @@
  * Description:             Pre-Ordering products using specific promo codes.
  * Plugin URI:              https://github.com/MrGKanev/WC-Pre-order
  * Description:             Displays users' last order dates and allows changing roles based on order inactivity.
- * Version:                 0.0.3
+ * Version:                 0.0.4
  * Author:                  Gabriel Kanev
  * Author URI:              https://gkanev.com
  * License:                 MIT
@@ -114,19 +114,13 @@ add_action('woocommerce_before_checkout_form', 'check_product_promo_code_and_tog
 
 function check_product_promo_code_and_toggle_checkout_button()
 {
-    // Get the promo codes from settings
     $options = get_option('wc_preorder_settings');
     $promo_codes_string = isset($options['promo_codes']) ? $options['promo_codes'] : '';
     $required_promo_codes = array_map('trim', explode(',', $promo_codes_string));
 
-    // Convert required promo codes to lowercase
-    $required_promo_codes = array_map('strtolower', $required_promo_codes);
-
-    // Get the product IDs that require a promo code from the settings
     $product_ids_string = isset($options['product_ids']) ? $options['product_ids'] : '';
     $required_product_ids = array_map('trim', explode(',', $product_ids_string));
 
-    // Check if any of the required product IDs are in the cart
     $found_required_product = false;
     foreach (WC()->cart->get_cart() as $cart_item_key => $cart_item) {
         if (in_array($cart_item['product_id'], $required_product_ids)) {
@@ -136,12 +130,7 @@ function check_product_promo_code_and_toggle_checkout_button()
     }
 
     if ($found_required_product) {
-        // Check if any of the required promo codes are applied
         $applied_coupons = WC()->cart->get_applied_coupons();
-
-        // Convert applied coupons to lowercase
-        $applied_coupons = array_map('strtolower', $applied_coupons);
-
         $valid_promo_code_applied = false;
         foreach ($required_promo_codes as $promo_code) {
             if (in_array($promo_code, $applied_coupons)) {
@@ -151,16 +140,15 @@ function check_product_promo_code_and_toggle_checkout_button()
         }
 
         if (!$valid_promo_code_applied) {
-            // If a required product is found and no valid promo code is applied, display an error message
-            $error_message = 'To continue, please apply one of the required promo codes.';
+            $error_message = 'To continue with pre-order products, please apply one of the required promo codes.';
             wc_add_notice($error_message, 'error');
-
-            // Hide the Proceed to Checkout button
             remove_action('woocommerce_proceed_to_checkout', 'woocommerce_button_proceed_to_checkout', 20);
         } else {
-            // If a valid promo code is applied, make sure the Proceed to Checkout button is visible
             add_action('woocommerce_proceed_to_checkout', 'woocommerce_button_proceed_to_checkout', 20);
         }
+    } else {
+        // If no required products are in the cart, ensure the checkout button is visible
+        add_action('woocommerce_proceed_to_checkout', 'woocommerce_button_proceed_to_checkout', 20);
     }
 }
 
@@ -174,23 +162,30 @@ function check_promo_code_ajax()
     $promo_codes_string = isset($options['promo_codes']) ? $options['promo_codes'] : '';
     $required_promo_codes = array_map('trim', explode(',', $promo_codes_string));
 
-    // Convert required promo codes to lowercase
-    $required_promo_codes = array_map('strtolower', $required_promo_codes);
+    $product_ids_string = isset($options['product_ids']) ? $options['product_ids'] : '';
+    $required_product_ids = array_map('trim', explode(',', $product_ids_string));
 
-    $applied_coupons = WC()->cart->get_applied_coupons();
-
-    // Convert applied coupons to lowercase
-    $applied_coupons = array_map('strtolower', $applied_coupons);
-
-    $valid_promo_code_applied = false;
-    foreach ($required_promo_codes as $promo_code) {
-        if (in_array($promo_code, $applied_coupons)) {
-            $valid_promo_code_applied = true;
+    $found_required_product = false;
+    foreach (WC()->cart->get_cart() as $cart_item_key => $cart_item) {
+        if (in_array($cart_item['product_id'], $required_product_ids)) {
+            $found_required_product = true;
             break;
         }
     }
 
-    wp_send_json_success(['valid' => $valid_promo_code_applied]);
+    if ($found_required_product) {
+        $applied_coupons = WC()->cart->get_applied_coupons();
+        $valid_promo_code_applied = false;
+        foreach ($required_promo_codes as $promo_code) {
+            if (in_array($promo_code, $applied_coupons)) {
+                $valid_promo_code_applied = true;
+                break;
+            }
+        }
+        wp_send_json_success(['valid' => $valid_promo_code_applied, 'required' => true]);
+    } else {
+        wp_send_json_success(['valid' => true, 'required' => false]);
+    }
 }
 
 // Enqueue JavaScript for dynamic button visibility
