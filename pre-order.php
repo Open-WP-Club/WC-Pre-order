@@ -119,6 +119,9 @@ function check_product_promo_code_and_toggle_checkout_button()
     $promo_codes_string = isset($options['promo_codes']) ? $options['promo_codes'] : '';
     $required_promo_codes = array_map('trim', explode(',', $promo_codes_string));
 
+    // Convert required promo codes to lowercase
+    $required_promo_codes = array_map('strtolower', $required_promo_codes);
+
     // Get the product IDs that require a promo code from the settings
     $product_ids_string = isset($options['product_ids']) ? $options['product_ids'] : '';
     $required_product_ids = array_map('trim', explode(',', $product_ids_string));
@@ -135,6 +138,10 @@ function check_product_promo_code_and_toggle_checkout_button()
     if ($found_required_product) {
         // Check if any of the required promo codes are applied
         $applied_coupons = WC()->cart->get_applied_coupons();
+
+        // Convert applied coupons to lowercase
+        $applied_coupons = array_map('strtolower', $applied_coupons);
+
         $valid_promo_code_applied = false;
         foreach ($required_promo_codes as $promo_code) {
             if (in_array($promo_code, $applied_coupons)) {
@@ -167,7 +174,14 @@ function check_promo_code_ajax()
     $promo_codes_string = isset($options['promo_codes']) ? $options['promo_codes'] : '';
     $required_promo_codes = array_map('trim', explode(',', $promo_codes_string));
 
+    // Convert required promo codes to lowercase
+    $required_promo_codes = array_map('strtolower', $required_promo_codes);
+
     $applied_coupons = WC()->cart->get_applied_coupons();
+
+    // Convert applied coupons to lowercase
+    $applied_coupons = array_map('strtolower', $applied_coupons);
+
     $valid_promo_code_applied = false;
     foreach ($required_promo_codes as $promo_code) {
         if (in_array($promo_code, $applied_coupons)) {
