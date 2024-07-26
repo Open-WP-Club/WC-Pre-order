@@ -1,55 +1,47 @@
-jQuery(document).ready(function($) {
+(function($) {
+    var debounceTimer;
+
     function convertPromoCodeToUppercase() {
-        $('input[name="coupon_code"]').on('input', function() {
+        $(document).on('input', 'input[name="coupon_code"]', function() {
             this.value = this.value.toUpperCase();
         });
     }
 
-    convertPromoCodeToUppercase();
-
     function checkPromoCode() {
-        $.ajax({
-            url: wc_preorder_ajax.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'check_promo_code'
-            },
-            success: function(response) {
-                console.log('AJAX Response:', response);
-                if (response.success) {
-                    if (response.data.required) {
-                        if (response.data.valid) {
-                            $('.checkout-button').show();
-                            $('.woocommerce-error').each(function() {
-                                if ($(this).text().includes('To continue with pre-order products, please apply one of the required promo codes.')) {
-                                    $(this).remove();
-                                }
-                            });
-                        } else {
-                            $('.checkout-button').hide();
-                        }
-                    } else {
-                        $('.checkout-button').show();
-                    }
-                    
-                    // Display debug info
-                    var debugInfo = '<div id="wc-preorder-debug">' +
-                        '<h4>Debug Info:</h4>' +
-                        '<pre>' + JSON.stringify(response.data.debug_info, null, 2) + '</pre>' +
-                        '<h4>Applied Coupons:</h4>' +
-                        '<pre>' + JSON.stringify(response.data.applied_coupons, null, 2) + '</pre>' +
-                        '<h4>Required Promo Codes:</h4>' +
-                        '<pre>' + JSON.stringify(response.data.required_promo_codes, null, 2) + '</pre>' +
-                        '</div>';
-                    $('#wc-preorder-debug').remove();
-                    $('body').append(debugInfo);
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(function() {
+            $.ajax({
+                url: wc_preorder_ajax.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'check_promo_code'
+                },
+                error: function(xhr, status, error) {
+                    console.error('AJAX Error:', status, error);
                 }
-            }
-        });
+            });
+        }, 300); // 300ms debounce
     }
 
-    checkPromoCode();
-    $(document.body).on('applied_coupon removed_coupon updated_cart_totals', checkPromoCode);
+    function updateCheckoutButton(data) {
+        var $checkoutButton = $('.checkout-button');
+        var $errorMessage = $('.woocommerce-error').filter(function() {
+            return $(this).text().includes('To continue with pre-order products, please apply one of the required promo codes.');
+        });
 
-    $(document.body).on('applied_coupon removed_coupon', convertPromoCodeToUppercase);
-});
+        if (data.required) {
+            $checkoutButton.toggle(data.valid);
+            $errorMessage.toggle(!data.valid);
+        } else {
+            $checkoutButton.show();
+            $errorMessage.remove();
+        }
+    }
+
+    $(function() {
+        convertPromoCodeToUppercase();
+        checkPromoCode();
+
+        $(document.body).on('applied_coupon removed_coupon updated_cart_totals', checkPromoCode);
+    });
+})(jQuery);
