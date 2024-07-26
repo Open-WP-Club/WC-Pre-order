@@ -146,27 +146,36 @@ function check_product_promo_code_and_toggle_checkout_button()
         }
     }
 
+    $debug_info = [];
+    $debug_info['found_required_product'] = $found_required_product;
+
     if ($found_required_product) {
-        $applied_coupons = WC()->cart->get_applied_coupons(); // WooCommerce coupons are already uppercase
+        $applied_coupons = WC()->cart->get_applied_coupons();
         $valid_promo_code_applied = false;
         foreach ($required_promo_codes as $promo_code) {
-            if (in_array($promo_code, $applied_coupons)) {
+            if (in_array(strtoupper($promo_code), array_map('strtoupper', $applied_coupons))) {
                 $valid_promo_code_applied = true;
-                break;
+                break;  // Break the loop as soon as we find one valid promo code
             }
         }
 
+        $debug_info['applied_coupons'] = $applied_coupons;
+        $debug_info['valid_promo_code_applied'] = $valid_promo_code_applied;
+
         if (!$valid_promo_code_applied) {
-            $error_message = 'To continue with pre-order products, please apply one of the required promo codes.';
-            wc_add_notice($error_message, 'error');
+            wc_add_notice('To continue with pre-order products, please apply one of the required promo codes.', 'error');
             remove_action('woocommerce_proceed_to_checkout', 'woocommerce_button_proceed_to_checkout', 20);
         } else {
+            wc_clear_notices();
             add_action('woocommerce_proceed_to_checkout', 'woocommerce_button_proceed_to_checkout', 20);
         }
     } else {
-        // If no required products are in the cart, ensure the checkout button is visible
+        wc_clear_notices();
         add_action('woocommerce_proceed_to_checkout', 'woocommerce_button_proceed_to_checkout', 20);
     }
+
+    // Store debug info in a transient
+    set_transient('wc_preorder_debug_info', $debug_info, 60 * 5); // Store for 5 minutes
 }
 
 // Add AJAX action to check promo code validity
@@ -191,15 +200,22 @@ function check_promo_code_ajax()
     }
 
     if ($found_required_product) {
-        $applied_coupons = WC()->cart->get_applied_coupons(); // WooCommerce coupons are already uppercase
+        $applied_coupons = WC()->cart->get_applied_coupons();
         $valid_promo_code_applied = false;
         foreach ($required_promo_codes as $promo_code) {
-            if (in_array($promo_code, $applied_coupons)) {
+            if (in_array(strtoupper($promo_code), array_map('strtoupper', $applied_coupons))) {
                 $valid_promo_code_applied = true;
-                break;
+                break;  // Break the loop as soon as we find one valid promo code
             }
         }
-        wp_send_json_success(['valid' => $valid_promo_code_applied, 'required' => true]);
+        $debug_info = get_transient('wc_preorder_debug_info');
+        wp_send_json_success([
+            'valid' => $valid_promo_code_applied,
+            'required' => true,
+            'debug_info' => $debug_info,
+            'applied_coupons' => $applied_coupons,
+            'required_promo_codes' => $required_promo_codes
+        ]);
     } else {
         wp_send_json_success(['valid' => true, 'required' => false]);
     }
