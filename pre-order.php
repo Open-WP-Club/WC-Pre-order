@@ -2,9 +2,9 @@
 
 /**
  * Plugin Name: WooCommerce Pre-Order Plugin
- * Description: Pre-Ordering products using specific promo codes.
+ * Description: Pre-Ordering products using specific promo codes and auto-applying promos after purchase.
  * Plugin URI:  https://github.com/MrGKanev/WC-Pre-order
- * Version:     0.0.6
+ * Version:     0.0.7
  * Author:      Gabriel Kanev
  * Author URI:  https://gkanev.com
  * License:     MIT
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('WC_PREORDER_VERSION', '0.0.6');
+define('WC_PREORDER_VERSION', '0.0.7');
 define('WC_PREORDER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WC_PREORDER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -43,6 +43,9 @@ class WC_PreOrder
         add_action('wp_ajax_check_promo_code', array($this, 'check_promo_code_ajax'));
         add_action('wp_ajax_nopriv_check_promo_code', array($this, 'check_promo_code_ajax'));
         add_action('wp_enqueue_scripts', array($this, 'enqueue_scripts'));
+        add_action('woocommerce_order_status_completed', array($this, 'check_and_apply_auto_promo'), 10, 1);
+        add_action('woocommerce_before_cart', array($this, 'apply_auto_promo_to_cart'), 1);
+        add_action('woocommerce_before_checkout_form', array($this, 'apply_auto_promo_to_cart'), 1);
     }
 
     public function add_admin_menu()
@@ -99,6 +102,22 @@ class WC_PreOrder
             'wc-preorder',
             'wc_preorder_main_section'
         );
+
+        add_settings_field(
+            'wc_preorder_auto_apply_promo',
+            __('Auto-apply Promo Code', 'wc-preorder-plugin'),
+            array($this, 'auto_apply_promo_field'),
+            'wc-preorder',
+            'wc_preorder_main_section'
+        );
+
+        add_settings_field(
+            'wc_preorder_auto_apply_product_id',
+            __('Product ID for Auto-apply', 'wc-preorder-plugin'),
+            array($this, 'auto_apply_product_id_field'),
+            'wc-preorder',
+            'wc_preorder_main_section'
+        );
     }
 
     public function sanitize_settings($input)
@@ -110,6 +129,12 @@ class WC_PreOrder
         if (isset($input['promo_codes'])) {
             $promo_codes = array_map('trim', explode(',', $input['promo_codes']));
             $sanitized_input['promo_codes'] = implode(',', array_map('strtoupper', $promo_codes));
+        }
+        if (isset($input['auto_apply_promo'])) {
+            $sanitized_input['auto_apply_promo'] = sanitize_text_field($input['auto_apply_promo']);
+        }
+        if (isset($input['auto_apply_product_id'])) {
+            $sanitized_input['auto_apply_product_id'] = intval($input['auto_apply_product_id']);
         }
         return $sanitized_input;
     }
@@ -132,6 +157,22 @@ class WC_PreOrder
         $promo_codes = isset($options['promo_codes']) ? $options['promo_codes'] : '';
         echo '<input type="text" id="wc_preorder_promo_codes" name="wc_preorder_settings[promo_codes]" value="' . esc_attr($promo_codes) . '" />';
         echo '<p class="description">' . __('Enter multiple promo codes separated by commas.', 'wc-preorder-plugin') . '</p>';
+    }
+
+    public function auto_apply_promo_field()
+    {
+        $options = get_option('wc_preorder_settings');
+        $auto_apply_promo = isset($options['auto_apply_promo']) ? $options['auto_apply_promo'] : '';
+        echo '<input type="text" id="wc_preorder_auto_apply_promo" name="wc_preorder_settings[auto_apply_promo]" value="' . esc_attr($auto_apply_promo) . '" />';
+        echo '<p class="description">' . __('Enter the promo code to be auto-applied.', 'wc-preorder-plugin') . '</p>';
+    }
+
+    public function auto_apply_product_id_field()
+    {
+        $options = get_option('wc_preorder_settings');
+        $auto_apply_product_id = isset($options['auto_apply_product_id']) ? $options['auto_apply_product_id'] : '';
+        echo '<input type="text" id="wc_preorder_auto_apply_product_id" name="wc_preorder_settings[auto_apply_product_id]" value="' . esc_attr($auto_apply_product_id) . '" />';
+        echo '<p class="description">' . __('Enter the product ID that triggers the auto-apply promo.', 'wc-preorder-plugin') . '</p>';
     }
 
     public function validate_cart()
@@ -204,6 +245,77 @@ class WC_PreOrder
     {
         wp_enqueue_script('wc-preorder-script', WC_PREORDER_PLUGIN_URL . 'wc-preorder-script.js', array('jquery'), WC_PREORDER_VERSION, true);
         wp_localize_script('wc-preorder-script', 'wc_preorder_ajax', array('ajax_url' => admin_url('admin-ajax.php')));
+    }
+
+     public function check_and_apply_auto_promo($order_id)
+    {
+        $order = wc_get_order($order_id);
+        if (!$order) {
+            return;
+        }
+
+        $options = get_option('wc_preorder_settings');
+        $auto_apply_promo = isset($options['auto_apply_promo']) ? $options['auto_apply_promo'] : '';
+        $auto_apply_product_id = isset($options['auto_apply_product_id']) ? intval($options['auto_apply_product_id']) : 0;
+
+        if (empty($auto_apply_promo) || empty($auto_apply_product_id)) {
+            return;
+        }
+
+        $product_in_order = false;
+        
+        // Check if the specified product is in the order
+        foreach ($order->get_items() as $item) {
+            if ($item->get_product_id() == $auto_apply_product_id) {
+                $product_in_order = true;
+                break;
+            }
+        }
+
+        if ($product_in_order) {
+            $user_id = $order->get_user_id();
+            if ($user_id) {
+                // Store the promo code in a transient for later use
+                set_transient('wc_preorder_auto_apply_promo_' . $user_id, $auto_apply_promo, DAY_IN_SECONDS);
+                error_log("Auto-apply promo code set for user " . $user_id . ": " . $auto_apply_promo);
+            }
+        }
+    }
+    
+    public function apply_auto_promo_to_cart()
+    {
+        // Check if user is logged in
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            return;
+        }
+
+        // Check if user has an auto-apply promo code
+        $auto_apply_promo = get_transient('wc_preorder_auto_apply_promo_' . $user_id);
+        if (empty($auto_apply_promo)) {
+            return;
+        }
+
+        error_log("Attempting to apply auto-apply promo code for user " . $user_id . ": " . $auto_apply_promo);
+
+        // Check if the promo code is already applied
+        if (!in_array($auto_apply_promo, WC()->cart->get_applied_coupons())) {
+            // Apply the promo code
+            $result = WC()->cart->apply_coupon($auto_apply_promo);
+
+            if ($result) {
+                error_log("Successfully applied promo code: " . $auto_apply_promo);
+                // Remove the promo code from transient to prevent multiple uses
+                delete_transient('wc_preorder_auto_apply_promo_' . $user_id);
+
+                // Add a notice to inform the user
+                wc_add_notice(sprintf(__('Promo code %s has been automatically applied to your cart.', 'wc-preorder-plugin'), $auto_apply_promo), 'success');
+            } else {
+                error_log("Failed to apply promo code: " . $auto_apply_promo);
+            }
+        } else {
+            error_log("Promo code already applied: " . $auto_apply_promo);
+        }
     }
 }
 
