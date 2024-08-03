@@ -247,7 +247,7 @@ class WC_PreOrder
         wp_localize_script('wc-preorder-script', 'wc_preorder_ajax', array('ajax_url' => admin_url('admin-ajax.php')));
     }
 
-     public function check_and_apply_auto_promo($order_id)
+    public function check_and_apply_auto_promo($order_id)
     {
         $order = wc_get_order($order_id);
         if (!$order) {
@@ -281,7 +281,7 @@ class WC_PreOrder
             }
         }
     }
-    
+
     public function apply_auto_promo_to_cart()
     {
         // Check if user is logged in
@@ -317,6 +317,6 @@ class WC_PreOrder
             error_log("Promo code already applied: " . $auto_apply_promo);
         }
     }
-}
-
-new WC_PreOrder();
+}   
+    // Instantiate the class
+    new WC_PreOrder();
