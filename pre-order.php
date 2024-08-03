@@ -44,8 +44,8 @@ class WC_PreOrder
         add_action('wp_ajax_nopriv_check_promo_code', array($this, 'check_promo_code_ajax'));
         add_action('wp_enqueue_scripts', array($this, 'enqueue_scripts'));
         add_action('woocommerce_order_status_completed', array($this, 'check_and_apply_auto_promo'), 10, 1);
-        add_action('woocommerce_before_cart', array($this, 'apply_auto_promo_to_cart'), 1);
-        add_action('woocommerce_before_checkout_form', array($this, 'apply_auto_promo_to_cart'), 1);
+        add_action('woocommerce_before_cart', array($this, 'apply_auto_promo_to_cart'), 10);
+        add_action('woocommerce_before_checkout_form', array($this, 'apply_auto_promo_to_cart'), 10);
     }
 
     public function add_admin_menu()
@@ -249,8 +249,11 @@ class WC_PreOrder
 
     public function check_and_apply_auto_promo($order_id)
     {
+        error_log("check_and_apply_auto_promo called for order " . $order_id);
+
         $order = wc_get_order($order_id);
         if (!$order) {
+            error_log("Order not found");
             return;
         }
 
@@ -258,12 +261,16 @@ class WC_PreOrder
         $auto_apply_promo = isset($options['auto_apply_promo']) ? $options['auto_apply_promo'] : '';
         $auto_apply_product_id = isset($options['auto_apply_product_id']) ? intval($options['auto_apply_product_id']) : 0;
 
+        error_log("Auto apply promo: " . $auto_apply_promo);
+        error_log("Auto apply product ID: " . $auto_apply_product_id);
+
         if (empty($auto_apply_promo) || empty($auto_apply_product_id)) {
+            error_log("Auto apply promo or product ID is empty");
             return;
         }
 
         $product_in_order = false;
-        
+
         // Check if the specified product is in the order
         foreach ($order->get_items() as $item) {
             if ($item->get_product_id() == $auto_apply_product_id) {
@@ -272,27 +279,35 @@ class WC_PreOrder
             }
         }
 
+        error_log("Product in order: " . ($product_in_order ? "Yes" : "No"));
+
         if ($product_in_order) {
             $user_id = $order->get_user_id();
             if ($user_id) {
                 // Store the promo code in a transient for later use
                 set_transient('wc_preorder_auto_apply_promo_' . $user_id, $auto_apply_promo, DAY_IN_SECONDS);
                 error_log("Auto-apply promo code set for user " . $user_id . ": " . $auto_apply_promo);
+            } else {
+                error_log("No user ID found for order");
             }
         }
     }
 
     public function apply_auto_promo_to_cart()
     {
+        error_log("apply_auto_promo_to_cart function called");
+
         // Check if user is logged in
         $user_id = get_current_user_id();
         if (!$user_id) {
+            error_log("User not logged in");
             return;
         }
 
         // Check if user has an auto-apply promo code
         $auto_apply_promo = get_transient('wc_preorder_auto_apply_promo_' . $user_id);
         if (empty($auto_apply_promo)) {
+            error_log("No auto-apply promo code found for user " . $user_id);
             return;
         }
 
@@ -312,6 +327,8 @@ class WC_PreOrder
                 wc_add_notice(sprintf(__('Promo code %s has been automatically applied to your cart.', 'wc-preorder-plugin'), $auto_apply_promo), 'success');
             } else {
                 error_log("Failed to apply promo code: " . $auto_apply_promo);
+                error_log("WC()->cart->get_cart_contents(): " . print_r(WC()->cart->get_cart_contents(), true));
+                error_log("WC()->cart->get_applied_coupons(): " . print_r(WC()->cart->get_applied_coupons(), true));
             }
         } else {
             error_log("Promo code already applied: " . $auto_apply_promo);
