@@ -1,0 +1,17 @@
+{
+    "name": "mrganev/wc-pre-order",
+    "description": "WooCommerce Pre-Order Plugin",
+    "type": "wordpress-plugin",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Gabriel Kanev"
+        }
+    ],
+    "require": {},
+    "autoload": {
+        "psr-4": {
+            "WCPreOrder\\": "src/"
+        }
+    }
+}
