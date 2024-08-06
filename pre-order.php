@@ -46,6 +46,8 @@ class WC_PreOrder
         add_action('woocommerce_order_status_completed', array($this, 'check_and_apply_auto_promo'), 10, 1);
         add_action('woocommerce_before_cart', array($this, 'apply_auto_promo_to_cart'), 10);
         add_action('woocommerce_before_checkout_form', array($this, 'apply_auto_promo_to_cart'), 10);
+        add_action('woocommerce_before_cart', array($this, 'apply_saved_promo_to_cart'), 10);
+        add_action('woocommerce_before_checkout_form', array($this, 'apply_saved_promo_to_cart'), 10);
     }
 
     public function add_admin_menu()
@@ -284,54 +286,44 @@ class WC_PreOrder
         if ($product_in_order) {
             $user_id = $order->get_user_id();
             if ($user_id) {
-                // Store the promo code in a transient for later use
-                set_transient('wc_preorder_auto_apply_promo_' . $user_id, $auto_apply_promo, DAY_IN_SECONDS);
-                error_log("Auto-apply promo code set for user " . $user_id . ": " . $auto_apply_promo);
+                // Store the promo code as user meta for later use
+                update_user_meta($user_id, 'wc_preorder_next_purchase_promo', $auto_apply_promo);
+                error_log("Auto-apply promo code saved for user " . $user_id . ": " . $auto_apply_promo);
             } else {
                 error_log("No user ID found for order");
             }
         }
     }
 
-    public function apply_auto_promo_to_cart()
+    public function apply_saved_promo_to_cart()
     {
-        error_log("apply_auto_promo_to_cart function called");
-
         // Check if user is logged in
         $user_id = get_current_user_id();
         if (!$user_id) {
-            error_log("User not logged in");
             return;
         }
 
-        // Check if user has an auto-apply promo code
-        $auto_apply_promo = get_transient('wc_preorder_auto_apply_promo_' . $user_id);
-        if (empty($auto_apply_promo)) {
-            error_log("No auto-apply promo code found for user " . $user_id);
+        // Check if user has a saved promo code
+        $saved_promo = get_user_meta($user_id, 'wc_preorder_next_purchase_promo', true);
+        if (empty($saved_promo)) {
             return;
         }
-
-        error_log("Attempting to apply auto-apply promo code for user " . $user_id . ": " . $auto_apply_promo);
 
         // Check if the promo code is already applied
-        if (!in_array($auto_apply_promo, WC()->cart->get_applied_coupons())) {
+        if (!in_array($saved_promo, WC()->cart->get_applied_coupons())) {
             // Apply the promo code
-            $result = WC()->cart->apply_coupon($auto_apply_promo);
+            $result = WC()->cart->apply_coupon($saved_promo);
 
             if ($result) {
-                error_log("Successfully applied promo code: " . $auto_apply_promo);
-                // Remove the promo code from transient to prevent multiple uses
-                delete_transient('wc_preorder_auto_apply_promo_' . $user_id);
+                error_log("Successfully applied saved promo code: " . $saved_promo);
+                // Remove the saved promo code to prevent multiple uses
+                delete_user_meta($user_id, 'wc_preorder_next_purchase_promo');
 
                 // Add a notice to inform the user
-                wc_add_notice(sprintf(__('Promo code %s has been automatically applied to your cart.', 'wc-preorder-plugin'), $auto_apply_promo), 'success');
+                wc_add_notice(sprintf(__('Promo code %s has been automatically applied to your cart.', 'wc-preorder-plugin'), $saved_promo), 'success');
             } else {
-                error_log("Failed to apply promo code: " . $auto_apply_promo);
-                error_log("WC()->cart->get_cart_contents(): " . print_r(WC()->cart->get_cart_contents(), true));
-                error_log("WC()->cart->get_applied_coupons(): " . print_r(WC()->cart->get_applied_coupons(), true));
+                error_log("Failed to apply saved promo code: " . $saved_promo);
             }
-        } else {
-            error_log("Promo code already applied: " . $auto_apply_promo);
         }
     }
 }   
