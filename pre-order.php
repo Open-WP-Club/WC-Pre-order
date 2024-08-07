@@ -46,8 +46,6 @@ class WC_PreOrder
         add_action('wp_ajax_nopriv_check_promo_code', array($this, 'check_promo_code_ajax'));
         add_action('wp_enqueue_scripts', array($this, 'enqueue_scripts'));
         add_action('woocommerce_order_status_completed', array($this, 'check_and_apply_auto_promo'), 10, 1);
-        add_action('woocommerce_before_cart', array($this, 'apply_auto_promo_to_cart'), 10);
-        add_action('woocommerce_before_checkout_form', array($this, 'apply_auto_promo_to_cart'), 10);
         add_action('woocommerce_before_cart', array($this, 'apply_saved_promo_to_cart'), 10);
         add_action('woocommerce_before_checkout_form', array($this, 'apply_saved_promo_to_cart'), 10);
     }
@@ -315,35 +313,31 @@ class WC_PreOrder
             return;
         }
 
-        $saved_promos = get_user_meta($user_id, 'wc_preorder_next_purchase_promos', true);
-        if (empty($saved_promos) || !is_array($saved_promos)) {
+        $options = $this->get_plugin_options();
+        $auto_apply_promos = isset($options['auto_apply_promos']) ? array_filter(explode("\n", $options['auto_apply_promos'])) : array();
+
+        if (empty($auto_apply_promos)) {
             return;
         }
 
-        foreach ($saved_promos as $index => $promo) {
-            if (!in_array($promo, WC()->cart->get_applied_coupons())) {
-                $result = WC()->cart->apply_coupon($promo);
+        $applied_coupons = WC()->cart->get_applied_coupons();
 
-                if ($result) {
-                    $this->logger->info("Successfully applied saved promo code: " . $promo, array('source' => 'wc-preorder'));
-                    wc_add_notice(sprintf(__('Promo code %s has been automatically applied to your cart.', 'wc-preorder-plugin'), $promo), 'success');
+        // Check if any of the auto-apply promos is already applied
+        $intersection = array_intersect($auto_apply_promos, $applied_coupons);
+        if (!empty($intersection)) {
+            return; // An auto-apply promo is already applied, so we don't need to do anything
+        }
 
-                    // Remove the applied promo from the list
-                    unset($saved_promos[$index]);
+        // Select a random promo code from the list
+        $random_promo = $auto_apply_promos[array_rand($auto_apply_promos)];
 
-                    // Update the user meta with remaining promos
-                    if (empty($saved_promos)) {
-                        delete_user_meta($user_id, 'wc_preorder_next_purchase_promos');
-                    } else {
-                        update_user_meta($user_id, 'wc_preorder_next_purchase_promos', array_values($saved_promos));
-                    }
+        $result = WC()->cart->apply_coupon($random_promo);
 
-                    // Only apply one promo code at a time
-                    break;
-                } else {
-                    $this->logger->error("Failed to apply saved promo code: " . $promo, array('source' => 'wc-preorder'));
-                }
-            }
+        if ($result) {
+            $this->logger->info("Successfully applied random auto-apply promo code: " . $random_promo, array('source' => 'wc-preorder'));
+            wc_add_notice(sprintf(__('Promo code %s has been automatically applied to your cart.', 'wc-preorder-plugin'), $random_promo), 'success');
+        } else {
+            $this->logger->error("Failed to apply random auto-apply promo code: " . $random_promo, array('source' => 'wc-preorder'));
         }
     }
 
