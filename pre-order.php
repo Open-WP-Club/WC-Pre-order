@@ -143,8 +143,9 @@ class WC_PreOrder
             $promo_codes = array_map('trim', explode(',', $input['promo_codes']));
             $sanitized_input['promo_codes'] = implode(',', array_map('strtoupper', $promo_codes));
         }
-        if (isset($input['auto_apply_promo'])) {
-            $sanitized_input['auto_apply_promo'] = sanitize_text_field($input['auto_apply_promo']);
+        if (isset($input['auto_apply_promos'])) {
+            $promos = array_map('trim', explode("\n", $input['auto_apply_promos']));
+            $sanitized_input['auto_apply_promos'] = implode("\n", array_filter($promos));
         }
         if (isset($input['auto_apply_product_id'])) {
             $sanitized_input['auto_apply_product_id'] = intval($input['auto_apply_product_id']);
@@ -178,9 +179,9 @@ class WC_PreOrder
     public function auto_apply_promo_field()
     {
         $options = $this->get_plugin_options();
-        $auto_apply_promo = isset($options['auto_apply_promo']) ? $options['auto_apply_promo'] : '';
-        echo '<input type="text" id="wc_preorder_auto_apply_promo" name="wc_preorder_settings[auto_apply_promo]" value="' . esc_attr($auto_apply_promo) . '" />';
-        echo '<p class="description">' . __('Enter the promo code to be auto-applied.', 'wc-preorder-plugin') . '</p>';
+        $auto_apply_promos = isset($options['auto_apply_promos']) ? $options['auto_apply_promos'] : '';
+        echo '<textarea id="wc_preorder_auto_apply_promos" name="wc_preorder_settings[auto_apply_promos]" rows="3" cols="50">' . esc_textarea($auto_apply_promos) . '</textarea>';
+        echo '<p class="description">' . __('Enter the promo codes to be auto-applied, one per line. They will be applied in the order listed.', 'wc-preorder-plugin') . '</p>';
     }
 
     public function auto_apply_product_id_field()
@@ -273,18 +274,19 @@ class WC_PreOrder
 
     public function check_and_apply_auto_promo($order_id)
     {
-        $this->logger->info("check_and_apply_auto_promo called for order " . $order_id, array('source' => 'wc-preorder'));
+        $this->logger->info("Auto apply promos: " . implode(', ', $auto_apply_promos), array('source' => 'wc-preorder'));
 
         $order = wc_get_order($order_id);
-        if (!$order) {
-            $this->logger->error("Order not found", array('source' => 'wc-preorder'));
+        if (empty($auto_apply_promos) || empty($auto_apply_product_id)) {
+            $this->logger->error("Auto apply promos or product ID is empty", array('source' => 'wc-preorder'));
             return;
         }
 
         $options = $this->get_plugin_options();
-        $auto_apply_promo = isset($options['auto_apply_promo']) ? $options['auto_apply_promo'] : '';
+        $auto_apply_promos = isset($options['auto_apply_promos']) ? array_filter(explode("\n", $options['auto_apply_promos'])) : array();
         $auto_apply_product_id = isset($options['auto_apply_product_id']) ? intval($options['auto_apply_product_id']) : 0;
         $auto_apply_limit = isset($options['auto_apply_limit']) ? intval($options['auto_apply_limit']) : 0;
+
 
         $this->logger->info("Auto apply promo: " . $auto_apply_promo, array('source' => 'wc-preorder'));
         $this->logger->info("Auto apply product ID: " . $auto_apply_product_id, array('source' => 'wc-preorder'));
@@ -310,14 +312,6 @@ class WC_PreOrder
         if ($product_in_order) {
             $user_id = $order->get_user_id();
             if ($user_id) {
-                // Check if the auto-apply promo code exists
-                $coupon = new \WC_Coupon($auto_apply_promo);
-                if (!$coupon->get_id()) {
-                    $this->logger->error("Auto-apply promo code does not exist: " . $auto_apply_promo, array('source' => 'wc-preorder'));
-                    return;
-                }
-
-                // Check usage limit
                 $usage_count = get_user_meta($user_id, 'wc_preorder_auto_apply_usage', true);
                 $usage_count = $usage_count ? intval($usage_count) : 0;
 
@@ -326,10 +320,10 @@ class WC_PreOrder
                     return;
                 }
 
-                // Store the promo code as user meta for later use
-                update_user_meta($user_id, 'wc_preorder_next_purchase_promo', $auto_apply_promo);
+                // Store the promo codes as user meta for later use
+                update_user_meta($user_id, 'wc_preorder_next_purchase_promos', $auto_apply_promos);
                 update_user_meta($user_id, 'wc_preorder_auto_apply_usage', $usage_count + 1);
-                $this->logger->info("Auto-apply promo code saved for user " . $user_id . ": " . $auto_apply_promo, array('source' => 'wc-preorder'));
+                $this->logger->info("Auto-apply promo codes saved for user " . $user_id . ": " . implode(', ', $auto_apply_promos), array('source' => 'wc-preorder'));
             } else {
                 $this->logger->error("No user ID found for order", array('source' => 'wc-preorder'));
             }
