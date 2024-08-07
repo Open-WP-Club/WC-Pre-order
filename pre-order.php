@@ -38,7 +38,6 @@ class WC_PreOrder
 
     public function __construct()
     {
-
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'register_settings'));
         add_action('woocommerce_check_cart_items', array($this, 'validate_cart'));
@@ -109,8 +108,8 @@ class WC_PreOrder
         );
 
         add_settings_field(
-            'wc_preorder_auto_apply_promo',
-            __('Auto-apply Promo Code', 'wc-preorder-plugin'),
+            'wc_preorder_auto_apply_promos',
+            __('Auto-apply Promo Codes', 'wc-preorder-plugin'),
             array($this, 'auto_apply_promo_field'),
             'wc-preorder',
             'wc_preorder_main_section'
@@ -274,11 +273,9 @@ class WC_PreOrder
 
     public function check_and_apply_auto_promo($order_id)
     {
-        $this->logger->info("Auto apply promos: " . implode(', ', $auto_apply_promos), array('source' => 'wc-preorder'));
-
         $order = wc_get_order($order_id);
-        if (empty($auto_apply_promos) || empty($auto_apply_product_id)) {
-            $this->logger->error("Auto apply promos or product ID is empty", array('source' => 'wc-preorder'));
+        if (!$order) {
+            $this->logger->error("Order not found", array('source' => 'wc-preorder'));
             return;
         }
 
@@ -287,13 +284,12 @@ class WC_PreOrder
         $auto_apply_product_id = isset($options['auto_apply_product_id']) ? intval($options['auto_apply_product_id']) : 0;
         $auto_apply_limit = isset($options['auto_apply_limit']) ? intval($options['auto_apply_limit']) : 0;
 
-
-        $this->logger->info("Auto apply promo: " . $auto_apply_promo, array('source' => 'wc-preorder'));
+        $this->logger->info("Auto apply promos: " . implode(', ', $auto_apply_promos), array('source' => 'wc-preorder'));
         $this->logger->info("Auto apply product ID: " . $auto_apply_product_id, array('source' => 'wc-preorder'));
         $this->logger->info("Auto apply limit: " . $auto_apply_limit, array('source' => 'wc-preorder'));
 
-        if (empty($auto_apply_promo) || empty($auto_apply_product_id)) {
-            $this->logger->error("Auto apply promo or product ID is empty", array('source' => 'wc-preorder'));
+        if (empty($auto_apply_promos) || empty($auto_apply_product_id)) {
+            $this->logger->error("Auto apply promos or product ID is empty", array('source' => 'wc-preorder'));
             return;
         }
 
@@ -332,32 +328,39 @@ class WC_PreOrder
 
     public function apply_saved_promo_to_cart()
     {
-        // Check if user is logged in
         $user_id = get_current_user_id();
         if (!$user_id) {
             return;
         }
 
-        // Check if user has a saved promo code
-        $saved_promo = get_user_meta($user_id, 'wc_preorder_next_purchase_promo', true);
-        if (empty($saved_promo)) {
+        $saved_promos = get_user_meta($user_id, 'wc_preorder_next_purchase_promos', true);
+        if (empty($saved_promos) || !is_array($saved_promos)) {
             return;
         }
 
-        // Check if the promo code is already applied
-        if (!in_array($saved_promo, WC()->cart->get_applied_coupons())) {
-            // Apply the promo code
-            $result = WC()->cart->apply_coupon($saved_promo);
+        foreach ($saved_promos as $index => $promo) {
+            if (!in_array($promo, WC()->cart->get_applied_coupons())) {
+                $result = WC()->cart->apply_coupon($promo);
 
-            if ($result) {
-                $this->logger->info("Successfully applied saved promo code: " . $saved_promo, array('source' => 'wc-preorder'));
-                // Remove the saved promo code to prevent multiple uses
-                delete_user_meta($user_id, 'wc_preorder_next_purchase_promo');
+                if ($result) {
+                    $this->logger->info("Successfully applied saved promo code: " . $promo, array('source' => 'wc-preorder'));
+                    wc_add_notice(sprintf(__('Promo code %s has been automatically applied to your cart.', 'wc-preorder-plugin'), $promo), 'success');
 
-                // Add a notice to inform the user
-                wc_add_notice(sprintf(__('Promo code %s has been automatically applied to your cart.', 'wc-preorder-plugin'), $saved_promo), 'success');
-            } else {
-                $this->logger->error("Failed to apply saved promo code: " . $saved_promo, array('source' => 'wc-preorder'));
+                    // Remove the applied promo from the list
+                    unset($saved_promos[$index]);
+
+                    // Update the user meta with remaining promos
+                    if (empty($saved_promos)) {
+                        delete_user_meta($user_id, 'wc_preorder_next_purchase_promos');
+                    } else {
+                        update_user_meta($user_id, 'wc_preorder_next_purchase_promos', array_values($saved_promos));
+                    }
+
+                    // Only apply one promo code at a time
+                    break;
+                } else {
+                    $this->logger->error("Failed to apply saved promo code: " . $promo, array('source' => 'wc-preorder'));
+                }
             }
         }
     }
