@@ -313,26 +313,16 @@ class WC_PreOrder
             return;
         }
 
-        $options = $this->get_plugin_options();
-        $auto_apply_promos = isset($options['auto_apply_promos']) ? array_filter(array_map('trim', explode("\n", $options['auto_apply_promos']))) : array();
+        $next_promo = get_user_meta($user_id, 'wc_preorder_next_purchase_promo', true);
 
-        if (empty($auto_apply_promos)) {
+        if (empty($next_promo)) {
             return;
         }
 
         $applied_coupons = WC()->cart->get_applied_coupons();
 
-        // Check if any of our auto-apply promos is already applied
-        $our_promo_applied = false;
-        foreach ($applied_coupons as $coupon) {
-            if (in_array($coupon, $auto_apply_promos)) {
-                $our_promo_applied = true;
-                break;
-            }
-        }
-
-        // If one of our promos is already applied, don't do anything
-        if ($our_promo_applied) {
+        // Check if the next promo is already applied
+        if (in_array($next_promo, $applied_coupons)) {
             return;
         }
 
@@ -341,21 +331,16 @@ class WC_PreOrder
             WC()->cart->remove_coupon($coupon);
         }
 
-        // Get the next promo code from the list
-        $next_promo = array_shift($auto_apply_promos);
+        $result = WC()->cart->apply_coupon($next_promo);
 
-        if ($next_promo) {
-            $result = WC()->cart->apply_coupon($next_promo);
+        if ($result) {
+            $this->logger->info("Successfully applied auto-apply promo code: " . $next_promo, array('source' => 'wc-preorder'));
+            wc_add_notice(sprintf(__('Promo code %s has been automatically applied to your cart.', 'wc-preorder-plugin'), $next_promo), 'success');
 
-            if ($result) {
-                $this->logger->info("Successfully applied auto-apply promo code: " . $next_promo, array('source' => 'wc-preorder'));
-                wc_add_notice(sprintf(__('Promo code %s has been automatically applied to your cart.', 'wc-preorder-plugin'), $next_promo), 'success');
-
-                // Update the remaining promo codes in the user meta
-                update_user_meta($user_id, 'wc_preorder_next_purchase_promos', $auto_apply_promos);
-            } else {
-                $this->logger->error("Failed to apply auto-apply promo code: " . $next_promo, array('source' => 'wc-preorder'));
-            }
+            // Delete the user meta since the promo code has been applied
+            delete_user_meta($user_id, 'wc_preorder_next_purchase_promo');
+        } else {
+            $this->logger->error("Failed to apply auto-apply promo code: " . $next_promo, array('source' => 'wc-preorder'));
         }
     }
 
