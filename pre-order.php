@@ -4,7 +4,7 @@
  * Plugin Name: WooCommerce Pre-Order Plugin
  * Description: Pre-Ordering products using specific promo codes and auto-applying promos after purchase.
  * Plugin URI:  https://github.com/MrGKanev/WC-Pre-order
- * Version:     0.0.9
+ * Version:     0.1.0
  * Author:      Gabriel Kanev
  * Author URI:  https://gkanev.com
  * License:     MIT
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('WC_PREORDER_VERSION', '0.0.8');
+define('WC_PREORDER_VERSION', '0.1.0');
 define('WC_PREORDER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WC_PREORDER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -93,7 +93,7 @@ class WC_PreOrder
             'wc-preorder'
         );
 
-        $this->add_settings_field('product_ids', __('Product IDs (comma separated)', 'wc-preorder-plugin'));
+        $this->add_settings_field('product_ids', __('Product IDs of Pre-Order items (comma separated)', 'wc-preorder-plugin'));
         $this->add_settings_field('promo_codes', __('Promo Codes (comma separated)', 'wc-preorder-plugin'));
         $this->add_settings_field('auto_apply_promos', __('Auto-apply Promo Codes', 'wc-preorder-plugin'));
         $this->add_settings_field('auto_apply_product_id', __('Product ID for Auto-apply', 'wc-preorder-plugin'));
@@ -296,10 +296,16 @@ class WC_PreOrder
                     return;
                 }
 
-                // Store the promo codes as user meta for later use
-                update_user_meta($user_id, 'wc_preorder_next_purchase_promos', $auto_apply_promos);
-                update_user_meta($user_id, 'wc_preorder_auto_apply_usage', $usage_count + 1);
-                $this->logger->info("Auto-apply promo codes saved for user " . $user_id . ": " . implode(', ', $auto_apply_promos), array('source' => 'wc-preorder'));
+                // Store only the first available promo code as user meta for later use
+                foreach ($auto_apply_promos as $promo_code) {
+                    $coupon = new \WC_Coupon($promo_code);
+                    if ($coupon->is_valid()) {
+                        update_user_meta($user_id, 'wc_preorder_next_purchase_promo', $promo_code);
+                        update_user_meta($user_id, 'wc_preorder_auto_apply_usage', $usage_count + 1);
+                        $this->logger->info("Auto-apply promo code saved for user " . $user_id . ": " . $promo_code, array('source' => 'wc-preorder'));
+                        break; // Exit the loop after finding the first valid promo code
+                    }
+                }
             } else {
                 $this->logger->error("No user ID found for order", array('source' => 'wc-preorder'));
             }
@@ -323,12 +329,8 @@ class WC_PreOrder
 
         // Check if the next promo is already applied
         if (in_array($next_promo, $applied_coupons)) {
+            $this->logger->info("Auto-apply promo code already applied: " . $next_promo, array('source' => 'wc-preorder'));
             return;
-        }
-
-        // Remove all existing coupons
-        foreach ($applied_coupons as $coupon) {
-            WC()->cart->remove_coupon($coupon);
         }
 
         $result = WC()->cart->apply_coupon($next_promo);
