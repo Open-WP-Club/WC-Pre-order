@@ -95,19 +95,28 @@ class WC_PreOrder
 
         $this->add_settings_field('product_ids', __('Product IDs of Pre-Order items (comma separated)', 'wc-preorder-plugin'));
         $this->add_settings_field('promo_codes', __('Promo Codes (comma separated)', 'wc-preorder-plugin'));
-        $this->add_settings_field('auto_apply_promos', __('Auto-apply Promo Codes', 'wc-preorder-plugin'));
-        $this->add_settings_field('auto_apply_product_id', __('Product ID for Auto-apply', 'wc-preorder-plugin'));
-        $this->add_settings_field('auto_apply_limit', __('Auto-apply Usage Limit', 'wc-preorder-plugin'));
+        
+        // New section for Auto-apply Promo Codes
+        add_settings_section(
+            'wc_preorder_auto_apply_section',
+            __('Auto-apply Promo Codes Settings', 'wc-preorder-plugin'),
+            array($this, 'auto_apply_section_text'),
+            'wc-preorder'
+        );
+        
+        $this->add_settings_field('auto_apply_promos', __('Auto-apply Promo Codes', 'wc-preorder-plugin'), 'wc_preorder_auto_apply_section');
+        $this->add_settings_field('auto_apply_product_id', __('Waitlist Pre-Order item - Product ID for Auto-apply', 'wc-preorder-plugin'), 'wc_preorder_auto_apply_section');
+        $this->add_settings_field('auto_apply_limit', __('Auto-apply Usage Limit', 'wc-preorder-plugin'), 'wc_preorder_auto_apply_section');
     }
 
-    private function add_settings_field($id, $title)
+    private function add_settings_field($id, $title, $section = 'wc_preorder_main_section')
     {
         add_settings_field(
             'wc_preorder_' . $id,
             $title,
             array($this, $id . '_field'),
             'wc-preorder',
-            'wc_preorder_main_section'
+            $section
         );
     }
 
@@ -116,8 +125,31 @@ class WC_PreOrder
         $sanitized_input = array();
         
         $sanitized_input['product_ids'] = isset($input['product_ids']) ? sanitize_text_field($input['product_ids']) : '';
-        $sanitized_input['promo_codes'] = isset($input['promo_codes']) ? sanitize_text_field($input['promo_codes']) : '';
-        $sanitized_input['auto_apply_promos'] = isset($input['auto_apply_promos']) ? sanitize_textarea_field($input['auto_apply_promos']) : '';
+        
+        // Sanitize promo codes
+        $promo_codes = isset($input['promo_codes']) ? sanitize_text_field($input['promo_codes']) : '';
+        
+        // Sanitize auto-apply promo codes
+        $auto_apply_promos = isset($input['auto_apply_promos']) ? sanitize_textarea_field($input['auto_apply_promos']) : '';
+        
+        // Convert auto-apply promos to an array and remove empty lines
+        $auto_apply_promos_array = array_filter(explode("\n", $auto_apply_promos));
+        
+        // Combine existing promo codes with auto-apply promo codes
+        $all_promo_codes = array_merge(
+            array_map('trim', explode(',', $promo_codes)),
+            array_map('trim', $auto_apply_promos_array)
+        );
+        
+        // Remove duplicates and empty values
+        $all_promo_codes = array_unique(array_filter($all_promo_codes));
+        
+        // Convert back to comma-separated string
+        $sanitized_input['promo_codes'] = implode(',', $all_promo_codes);
+        
+        // Keep the original auto-apply promos
+        $sanitized_input['auto_apply_promos'] = $auto_apply_promos;
+        
         $sanitized_input['auto_apply_product_id'] = isset($input['auto_apply_product_id']) ? intval($input['auto_apply_product_id']) : '';
         $sanitized_input['auto_apply_limit'] = isset($input['auto_apply_limit']) ? intval($input['auto_apply_limit']) : '';
 
@@ -129,6 +161,11 @@ class WC_PreOrder
         echo '<p>' . __('Enter your settings below:', 'wc-preorder-plugin') . '</p>';
     }
 
+    public function auto_apply_section_text()
+    {
+        echo '<p>' . __('When you buy a product from "Auto-Apply Promo Codes" item you automatically get a promocode. That promocode is used so you can get the Pre-Order item.', 'wc-preorder-plugin') . '</p>';
+    }
+
     public function product_ids_field()
     {
         $this->render_text_field('product_ids');
@@ -137,19 +174,19 @@ class WC_PreOrder
     public function promo_codes_field()
     {
         $this->render_text_field('promo_codes');
-        echo '<p class="description">' . __('Enter multiple promo codes separated by commas.', 'wc-preorder-plugin') . '</p>';
+        echo '<p class="description">' . __('Enter multiple promo codes separated by commas. Auto-apply promo codes are automatically added to this list.', 'wc-preorder-plugin') . '</p>';
     }
 
     public function auto_apply_promos_field()
     {
         $this->render_textarea_field('auto_apply_promos');
-        echo '<p class="description">' . __('Enter the promo codes to be auto-applied, one per line. They will be applied in the order listed.', 'wc-preorder-plugin') . '</p>';
+        echo '<p class="description">' . __('Enter the promo codes to be auto-applied, one per line. These codes will be automatically added to the general Promo Codes list above.', 'wc-preorder-plugin') . '</p>';
     }
 
     public function auto_apply_product_id_field()
     {
         $this->render_text_field('auto_apply_product_id');
-        echo '<p class="description">' . __('Enter the product ID that triggers the auto-apply promo.', 'wc-preorder-plugin') . '</p>';
+        echo '<p class="description">' . __('Enter the product ID of the Waitlist Pre-Order item that triggers the auto-apply promo.', 'wc-preorder-plugin') . '</p>';
     }
 
     public function auto_apply_limit_field()
