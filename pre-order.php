@@ -7,11 +7,12 @@
  * Version:     0.1.0
  * Author:      Gabriel Kanev
  * Author URI:  https://gkanev.com
- * License:     MIT
+ * License:     GPL-2.0 License
+ * Requires Plugins: woocommerce
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * WC requires at least: 7.1
- * WC tested up to:     9.1.4
+ * WC tested up to:     9.2.1
  */
 
 namespace WCPreOrder;
