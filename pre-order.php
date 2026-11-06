@@ -2,6 +2,7 @@
 
 /**
  * Plugin Name: WooCommerce Pre-Order Plugin
+ * Tested up to: 7.1.4
  * Description: Pre-Ordering products using specific promo codes and auto-applying promos after purchase.
  * Plugin URI:  https://github.com/MrGKanev/WC-Pre-order
  * Version:     0.1.0
@@ -12,7 +13,7 @@
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * WC requires at least: 7.1
- * WC tested up to:     9.2.1
+ * WC tested up to:     11.2.2
  */
 
 namespace WCPreOrder;
